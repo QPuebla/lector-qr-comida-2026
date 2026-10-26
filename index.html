@@ -1,0 +1,222 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1">
+
+  <title>Lector QR - Comida 2026</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f5f7;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .tarjeta {
+      max-width: 440px;
+      margin: 20px auto;
+      background: white;
+      border-radius: 14px;
+      padding: 22px;
+      box-shadow: 0 3px 12px #0002;
+      text-align: center;
+    }
+
+    h2 {
+      color: #941b80;
+    }
+
+    #lector {
+      width: 100%;
+      margin: 15px auto;
+    }
+
+    button {
+      background: #941b80;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 16px;
+      width: 100%;
+      margin: 8px 0;
+    }
+
+    button:disabled {
+      background: #aaa;
+    }
+
+    .mensaje {
+      padding: 12px;
+      margin-top: 12px;
+      border-radius: 8px;
+      background: #f1f1f1;
+      overflow-wrap: anywhere;
+    }
+
+    .exito {
+      background: #e3f5e8;
+      color: #176b36;
+    }
+
+    .error {
+      background: #ffe0e0;
+      color: #a40000;
+    }
+
+    .oculto {
+      display: none;
+    }
+  </style>
+
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head>
+
+<body>
+
+  <div class="tarjeta">
+
+    <h2>Control de acceso</h2>
+    <p>Comida de Fin de Año 2026</p>
+
+    <button id="iniciar" onclick="iniciarCamara()">
+      📷 Iniciar escáner QR
+    </button>
+
+    <div id="lector"></div>
+
+    <button id="detener"
+            class="oculto"
+            onclick="detenerCamara()">
+      Detener cámara
+    </button>
+
+    <div id="mensaje" class="mensaje">
+      Presiona el botón para comenzar.
+    </div>
+
+  </div>
+
+  <script>
+    let lector = null;
+    let activo = false;
+    let procesando = false;
+
+    function mostrarMensaje(texto, tipo = '') {
+      const elemento =
+        document.getElementById('mensaje');
+
+      elemento.textContent = texto;
+      elemento.className = 'mensaje';
+
+      if (tipo) {
+        elemento.classList.add(tipo);
+      }
+    }
+
+    async function iniciarCamara() {
+      if (activo || procesando) return;
+
+      if (typeof Html5Qrcode === 'undefined') {
+        mostrarMensaje(
+          'No se cargó el lector QR.',
+          'error'
+        );
+        return;
+      }
+
+      procesando = true;
+
+      document.getElementById('iniciar')
+        .disabled = true;
+
+      mostrarMensaje('Abriendo cámara...');
+
+      try {
+        lector = new Html5Qrcode('lector');
+
+        await lector.start(
+          { facingMode: 'environment' },
+          {
+            fps: 10,
+            qrbox: {
+              width: 220,
+              height: 220
+            }
+          },
+          async function(codigo) {
+            if (procesando) return;
+
+            procesando = true;
+
+            mostrarMensaje(
+              'QR reconocido correctamente.',
+              'exito'
+            );
+
+            await detenerCamara();
+
+            document.getElementById('mensaje')
+              .textContent =
+              'Código leído. Listo para consultar el pase.';
+
+            // En el siguiente paso conectaremos
+            // este lector con nuestra recepción.
+            document.getElementById('mensaje')
+              .dataset.codigo = codigo;
+
+            procesando = false;
+          },
+          function() {}
+        );
+
+        activo = true;
+
+        document.getElementById('detener')
+          .classList.remove('oculto');
+
+        mostrarMensaje(
+          'Apunta la cámara al código QR.'
+        );
+
+      } catch (error) {
+        mostrarMensaje(
+          'No se pudo abrir la cámara: ' +
+          (error.message || String(error)),
+          'error'
+        );
+
+      } finally {
+        procesando = false;
+
+        document.getElementById('iniciar')
+          .disabled = false;
+      }
+    }
+
+    async function detenerCamara() {
+      if (lector) {
+        try {
+          if (activo) {
+            await lector.stop();
+          }
+          lector.clear();
+        } catch (error) {
+          console.log(error);
+        }
+      }
+
+      lector = null;
+      activo = false;
+
+      document.getElementById('detener')
+        .classList.add('oculto');
+    }
+  </script>
+
+</body>
+</html>
