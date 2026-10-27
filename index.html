@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -44,10 +43,15 @@
       font-size: 16px;
       width: 100%;
       margin: 8px 0;
+      cursor: pointer;
     }
 
     button:disabled {
       background: #aaa;
+    }
+
+    .secundario {
+      background: #666;
     }
 
     .mensaje {
@@ -78,145 +82,164 @@
 
 <body>
 
-  <div class="tarjeta">
+<div class="tarjeta">
 
-    <h2>Control de acceso</h2>
-    <p>Comida de Fin de Año 2026</p>
+  <h2>Control de acceso</h2>
+  <p>Comida de Fin de Año 2026</p>
 
-    <button id="iniciar" onclick="iniciarCamara()">
-      📷 Iniciar escáner QR
-    </button>
+  <button id="iniciar" onclick="iniciarCamara()">
+    📷 Iniciar escáner QR
+  </button>
 
-    <div id="lector"></div>
+  <div id="lector"></div>
 
-    <button id="detener"
-            class="oculto"
-            onclick="detenerCamara()">
-      Detener cámara
-    </button>
+  <button id="detener"
+          class="secundario oculto"
+          onclick="detenerCamara()">
+    Detener cámara
+  </button>
 
-    <div id="mensaje" class="mensaje">
-      Presiona el botón para comenzar.
-    </div>
-
+  <div id="mensaje" class="mensaje">
+    Presiona el botón para comenzar.
   </div>
 
-  <script>
-    let lector = null;
-    let activo = false;
-    let procesando = false;
+</div>
 
-    function mostrarMensaje(texto, tipo = '') {
-      const elemento =
-        document.getElementById('mensaje');
+<script>
+  // Aplicación de recepción en Google Apps Script.
+  const URL_RECEPCION =
+    'https://script.google.com/macros/s/AKfycbwC8X-1T7ZhYpMKf2qWUi2fRM1Bjf3AlZhIGriJpKk8KNzz54o8J8v6nOsZPig7fWPk/exec';
 
-      elemento.textContent = texto;
-      elemento.className = 'mensaje';
+  let lector = null;
+  let activo = false;
+  let iniciando = false;
+  let procesando = false;
 
-      if (tipo) {
-        elemento.classList.add(tipo);
-      }
+  function mostrarMensaje(texto, tipo = '') {
+    const elemento =
+      document.getElementById('mensaje');
+
+    elemento.textContent = texto;
+    elemento.className = 'mensaje';
+
+    if (tipo) {
+      elemento.classList.add(tipo);
+    }
+  }
+
+  async function iniciarCamara() {
+    if (activo || iniciando || procesando) {
+      return;
     }
 
-    async function iniciarCamara() {
-      if (activo || procesando) return;
-
-      if (typeof Html5Qrcode === 'undefined') {
-        mostrarMensaje(
-          'No se cargó el lector QR.',
-          'error'
-        );
-        return;
-      }
-
-      procesando = true;
-
-      document.getElementById('iniciar')
-        .disabled = true;
-
-      mostrarMensaje('Abriendo cámara...');
-
-      try {
-        lector = new Html5Qrcode('lector');
-
-        await lector.start(
-          { facingMode: 'environment' },
-          {
-            fps: 10,
-            qrbox: {
-              width: 220,
-              height: 220
-            }
-          },
-          async function(codigo) {
-            if (procesando) return;
-
-            procesando = true;
-
-            mostrarMensaje(
-              'QR reconocido correctamente.',
-              'exito'
-            );
-
-            await detenerCamara();
-
-            document.getElementById('mensaje')
-              .textContent =
-              'Código leído. Listo para consultar el pase.';
-
-            // En el siguiente paso conectaremos
-            // este lector con nuestra recepción.
-            document.getElementById('mensaje')
-              .dataset.codigo = codigo;
-
-            procesando = false;
-          },
-          function() {}
-        );
-
-        activo = true;
-
-        document.getElementById('detener')
-          .classList.remove('oculto');
-
-        mostrarMensaje(
-          'Apunta la cámara al código QR.'
-        );
-
-      } catch (error) {
-        mostrarMensaje(
-          'No se pudo abrir la cámara: ' +
-          (error.message || String(error)),
-          'error'
-        );
-
-      } finally {
-        procesando = false;
-
-        document.getElementById('iniciar')
-          .disabled = false;
-      }
+    if (typeof Html5Qrcode === 'undefined') {
+      mostrarMensaje(
+        'No se cargó el lector QR. Revisa la conexión.',
+        'error'
+      );
+      return;
     }
 
-    async function detenerCamara() {
-      if (lector) {
-        try {
-          if (activo) {
-            await lector.stop();
+    iniciando = true;
+
+    document.getElementById('iniciar')
+      .disabled = true;
+
+    mostrarMensaje('Abriendo cámara...');
+
+    try {
+      lector = new Html5Qrcode('lector');
+
+      await lector.start(
+        { facingMode: 'environment' },
+        {
+          fps: 10,
+          qrbox: {
+            width: 220,
+            height: 220
           }
-          lector.clear();
-        } catch (error) {
-          console.log(error);
-        }
-      }
+        },
+        function(codigo) {
+          if (procesando) return;
 
-      lector = null;
-      activo = false;
+          procesando = true;
+
+          mostrarMensaje(
+            'QR reconocido. Abriendo recepción...',
+            'exito'
+          );
+
+          const token = String(codigo).trim();
+
+          if (!token) {
+            procesando = false;
+            return;
+          }
+
+          // Detener la cámara antes de cambiar
+          // a la página de recepción.
+          detenerCamara().finally(function() {
+            const separador =
+              URL_RECEPCION.includes('?') ? '&' : '?';
+
+            const destino =
+              URL_RECEPCION +
+              separador +
+              'token=' +
+              encodeURIComponent(token);
+
+            window.location.assign(destino);
+          });
+        },
+        function() {}
+      );
+
+      activo = true;
 
       document.getElementById('detener')
-        .classList.add('oculto');
+        .classList.remove('oculto');
+
+      mostrarMensaje(
+        'Apunta la cámara al código QR.'
+      );
+
+    } catch (error) {
+      mostrarMensaje(
+        'No se pudo abrir la cámara: ' +
+        (error.message || String(error)),
+        'error'
+      );
+
+      lector = null;
+
+    } finally {
+      iniciando = false;
+
+      document.getElementById('iniciar')
+        .disabled = false;
     }
-  </script>
+  }
+
+  async function detenerCamara() {
+    if (lector) {
+      try {
+        if (activo) {
+          await lector.stop();
+        }
+
+        lector.clear();
+      } catch (error) {
+        console.log(error);
+      }
+    }
+
+    lector = null;
+    activo = false;
+
+    document.getElementById('detener')
+      .classList.add('oculto');
+  }
+</script>
 
 </body>
 </html>
